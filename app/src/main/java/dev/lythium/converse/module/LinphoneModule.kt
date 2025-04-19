@@ -2,6 +2,11 @@ package dev.lythium.converse.module
 
 import android.Manifest
 import android.content.Context
+import android.content.Context.TELECOM_SERVICE
+import android.net.Uri
+import android.os.Bundle
+import android.telecom.TelecomManager
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import dagger.Module
 import dagger.Provides
@@ -9,6 +14,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.lythium.converse.data.CredentialsStorage
+import dev.lythium.converse.manager.PhoneAccountManager
 import org.linphone.core.Account
 import org.linphone.core.Call
 import org.linphone.core.Core
@@ -45,9 +51,10 @@ object LinphoneModule {
     @Provides
     @Singleton
     fun provideLinphoneCoreListener(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        phoneAccountManager: PhoneAccountManager
     ): LinphoneCoreListener {
-        return LinphoneCoreListener(context)
+        return LinphoneCoreListener(context, phoneAccountManager)
     }
 
     fun login(
@@ -93,7 +100,8 @@ object LinphoneModule {
 
 @Singleton
 class LinphoneCoreListener @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val phoneAccountManager: PhoneAccountManager
 ) : CoreListenerStub() {
     override fun onAccountRegistrationStateChanged(
         core: Core,
@@ -104,6 +112,7 @@ class LinphoneCoreListener @Inject constructor(
         println("Registration state changed: $state - $message")
     }
 
+
     @RequiresPermission(Manifest.permission.ANSWER_PHONE_CALLS)
     override fun onCallStateChanged(
         core: Core,
@@ -111,6 +120,36 @@ class LinphoneCoreListener @Inject constructor(
         state: Call.State?,
         message: String
     ) {
-        println("Call state changed: $state - $message")
+        val telecomManager = context.getSystemService(TELECOM_SERVICE) as TelecomManager
+
+        when (state) {
+            Call.State.IncomingReceived -> {
+                Log.d("LinphoneModule", "Incoming call received")
+
+                val phoneAccountHandle = phoneAccountManager.getPhoneAccountHandle()
+                val address = Uri.fromParts("sip", call.remoteAddress.username, null)
+                val extras = Bundle().apply {
+                    putParcelable(TelecomManager.EXTRA_INCOMING_CALL_ADDRESS, address)
+                }
+
+                if (phoneAccountManager.isPhoneAccountEnabled(phoneAccountHandle)) {
+                    Log.d("LinphoneModule", "Pushing to telecom manager")
+                    telecomManager.addNewIncomingCall(phoneAccountHandle, extras)
+                } else {
+                    phoneAccountManager.enablePhoneAccount(phoneAccountHandle)
+                }
+            }
+            Call.State.End -> {
+                Log.d("LinphoneModule", "Call ended")
+                core.currentCall?.terminate()
+            }
+            Call.State.Released -> {
+                Log.d("LinphoneModule", "Call released")
+                telecomManager.endCall()
+            }
+            else -> {
+                Log.d("LinphoneModule", "Unhandled call state changed: $state")
+            }
+        }
     }
 }

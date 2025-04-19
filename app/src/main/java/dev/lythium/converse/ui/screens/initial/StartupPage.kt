@@ -1,7 +1,10 @@
 package dev.lythium.converse.ui.screens.initial
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
+import android.telecom.PhoneAccountHandle
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.Composable
@@ -10,32 +13,38 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.lythium.converse.data.CredentialsStorage
+import dev.lythium.converse.service.ConverseConnectionService
+import dev.lythium.converse.ui.viewmodel.LinphoneViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.linphone.core.TransportType
 import javax.inject.Inject
 
 enum class StartupPage {
     Welcome,
     Permissions,
-    Login
+    Login,
+    EnablePhone,
 }
 
 @SuppressLint("InlinedApi")
-private val REQUIRED_PERMISSIONS = arrayOf(
-    android.Manifest.permission.READ_PHONE_STATE,
-    android.Manifest.permission.READ_PHONE_NUMBERS,
-    android.Manifest.permission.ANSWER_PHONE_CALLS,
-    android.Manifest.permission.RECORD_AUDIO,
-    android.Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
-    android.Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
-    android.Manifest.permission.MANAGE_OWN_CALLS,
-    android.Manifest.permission.POST_NOTIFICATIONS
+private val REQUIRED_PERMISSIONS = listOf(
+    Manifest.permission.READ_PHONE_STATE,
+    Manifest.permission.READ_PHONE_NUMBERS,
+    Manifest.permission.ANSWER_PHONE_CALLS,
+    Manifest.permission.RECORD_AUDIO,
+    Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
+    Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
+    Manifest.permission.MANAGE_OWN_CALLS,
+    Manifest.permission.POST_NOTIFICATIONS
 )
 
 @HiltViewModel
@@ -56,6 +65,16 @@ class StartupViewModel @Inject constructor(
         val allGranted = REQUIRED_PERMISSIONS.all { permissionsResult[it] == true }
         _allPermissionsGranted.value = allGranted
 
+        Log.d("StartupViewModel", "All permissions granted: $allGranted")
+
+        for ((permission, granted) in permissionsResult) {
+            if (granted) {
+                Log.d("StartupViewModel", "Permission granted: $permission")
+            } else {
+                Log.d("StartupViewModel", "Permission denied: $permission")
+            }
+        }
+
         if (allGranted) {
             navigateTo(StartupPage.Login)
         } else {
@@ -69,39 +88,44 @@ class StartupViewModel @Inject constructor(
 fun StartupScreen(
     modifier: Modifier = Modifier,
     viewModel: StartupViewModel = viewModel(),
+    linphoneViewModel: LinphoneViewModel = hiltViewModel()
 ) {
     val currentPage by viewModel.currentPage.collectAsState()
-    val allPermissionsGranted by viewModel.allPermissionsGranted.collectAsState()
-    val context = LocalContext.current
 
     val multiplePermissionsState = rememberMultiplePermissionsState(
-        permissions = REQUIRED_PERMISSIONS.toList()
+        permissions = REQUIRED_PERMISSIONS
     ) { permissionsResult ->
         viewModel.onAllPermissionsResult(permissionsResult)
     }
 
-    Log.d("StartupScreen", "Current page: $currentPage")
-
     LaunchedEffect(Unit) {
-        if (currentPage == StartupPage.Permissions) {
-            Log.d("StartupScreen", "Requesting permissions")
-            multiplePermissionsState.launchMultiplePermissionRequest()
-            if (allPermissionsGranted) {
-                viewModel.navigateTo(StartupPage.Login)
+        val (username, password, domain) = linphoneViewModel.getCredentials()
+        if (username.isNotEmpty() && password.isNotEmpty() && domain.isNotEmpty()) {
+            val savedLoginSuccess = linphoneViewModel.login(username, password, domain, TransportType.Tcp)
+            if (savedLoginSuccess) {
+                viewModel.navigateTo(StartupPage.EnablePhone)
             }
         }
     }
 
     when (currentPage) {
-        StartupPage.Welcome ->  WelcomeScreen({ viewModel.navigateTo(StartupPage.Permissions) }, modifier)
+        StartupPage.Welcome ->  WelcomeScreen({
+            if (multiplePermissionsState.allPermissionsGranted) {
+                viewModel.navigateTo(StartupPage.Login)
+            } else {
+                viewModel.navigateTo(StartupPage.Permissions)
+            }
+        }, modifier)
         StartupPage.Permissions -> PermissionsScreen(
-            permissions = REQUIRED_PERMISSIONS,
-            onGrantPermissions = { multiplePermissionsState.launchMultiplePermissionRequest() },
-            shouldShowRationale = multiplePermissionsState.shouldShowRationale,
+            multiplePermissionsState = multiplePermissionsState,
             modifier = modifier
         )
         StartupPage.Login -> LoginScreen(
-            onLoginSuccess = TODO(),
+            onLoginSuccess = { viewModel.navigateTo(StartupPage.EnablePhone) },
+            modifier = modifier
+        )
+        StartupPage.EnablePhone -> EnablePhoneScreen(
+            onSuccess = { Log.d("StartupScreen", "Phone enabled") },
             modifier = modifier
         )
     }
