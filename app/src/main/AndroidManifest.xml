@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".ConverseApplication"
@@ -24,7 +25,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.Converse">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -38,6 +38,19 @@
             android:stopWithTask="false"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
             />
+        <service
+            android:name=".service.ConverseListenerService"
+            android:foregroundServiceType="phoneCall"
+            android:stopWithTask="false"
+            />
+        <receiver android:name=".receivers.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

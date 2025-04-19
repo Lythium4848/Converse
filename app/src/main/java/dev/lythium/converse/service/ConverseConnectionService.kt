@@ -78,7 +78,6 @@ class ConverseConnection @Inject constructor(
 @AndroidEntryPoint
 class ConverseConnectionService : ConnectionService() {
     companion object {
-        const val FOREGROUND_SERVICE_ID = 1
         const val LOG_TAG = "ConverseConnectionService"
     }
 
@@ -96,10 +95,10 @@ class ConverseConnectionService : ConnectionService() {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        val notification = NotificationCompat.Builder(this, "converse_in_call_service")
-            .setContentTitle("In Call Service")
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle(channelName)
             .setContentText("Service Is Running")
-            .setSmallIcon(R.mipmap.ic_launcher) // Ensure this icon exists
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
