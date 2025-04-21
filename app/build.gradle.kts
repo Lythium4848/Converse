@@ -58,6 +58,8 @@ dependencies {
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.core.splashscreen)
     ksp(libs.hilt.android.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

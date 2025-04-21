@@ -12,14 +12,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.lythium.converse.data.AppDataStoreRepository
 import dev.lythium.converse.ui.viewmodel.LinphoneViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import org.linphone.core.TransportType
 import javax.inject.Inject
 
@@ -39,18 +42,19 @@ private val REQUIRED_PERMISSIONS = listOf(
     Manifest.permission.FOREGROUND_SERVICE_PHONE_CALL,
     Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
     Manifest.permission.MANAGE_OWN_CALLS,
-    Manifest.permission.POST_NOTIFICATIONS
+    Manifest.permission.POST_NOTIFICATIONS,
+    Manifest.permission.CALL_PHONE
 )
 
 @HiltViewModel
 class StartupViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context
+    @ApplicationContext private val appContext: Context,
+    val appDataStoreRepository: AppDataStoreRepository
 ) : ViewModel() {
     private val _currentPage = MutableStateFlow(StartupPage.Welcome)
     val currentPage: StateFlow<StartupPage> = _currentPage
 
     private val _allPermissionsGranted = MutableStateFlow(false)
-    val allPermissionsGranted: StateFlow<Boolean> = _allPermissionsGranted
 
     fun navigateTo(page: StartupPage) {
         _currentPage.value = page
@@ -75,6 +79,10 @@ class StartupViewModel @Inject constructor(
         } else {
             Toast.makeText(appContext, "Some required permissions were denied", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    suspend fun setAppFullySetup(isSetup: Boolean) {
+        appDataStoreRepository.setAppFullySetup(isSetup)
     }
 }
 
@@ -120,7 +128,11 @@ fun StartupScreen(
             modifier = modifier
         )
         StartupPage.EnablePhone -> EnablePhoneScreen(
-            onSuccess = { Log.d("StartupScreen", "Phone enabled") },
+            onSuccess = {
+                viewModel.viewModelScope.launch {
+                    viewModel.setAppFullySetup(true)
+                }
+            },
             modifier = modifier
         )
     }

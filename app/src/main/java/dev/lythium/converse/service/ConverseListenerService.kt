@@ -68,9 +68,13 @@ class ConverseListenerService : Service() {
             .setContentText("Listening for incoming calls")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
+            .setColorized(false)
             .build()
 
-        startForeground(1, notification)
+        val randId = System.currentTimeMillis() % 10000
+        startForeground(randId.toInt(), notification)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
